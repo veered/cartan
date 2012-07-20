@@ -1,8 +1,9 @@
 module Cartan
 
 	class Orchestrator
+		include Cartan::Mixins::Node, Cartan::Mixins::Messaging
 
-		attr_accessor :redis, :amqp, :channel, :orchestra
+		attr_accessor :uuid, :redis, :amqp, :channel, :orchestra
 
 		state_machine :state, :initial => :initializing do
 			after_transition [:initializing, :recovering] => :connecting, :do => :connect
@@ -27,20 +28,17 @@ module Cartan
 			end
 		end
 
-		# Initialize orchestrator.
+		# Initialize node.
 		# 
 		# @param [String] config The path to the configuration file.
 		def initialize(config)
 			super()
 
-			Cartan::Config.from_file(config, "json")
+			load_config(config)
+			capture_signals
 
-			Cartan::Log.loggers << Logger.new(Cartan::Config[:log_location])
-			Cartan::Log.level = Cartan::Config[:log_level]
-
-			Signal.trap("INT") { killed }
-
-			@uuid = SecureRandom.uuid
+			@workers = "workers"
+			@resources = "resources"
 
 			EM.synchrony do
 				initialized
@@ -62,15 +60,11 @@ module Cartan
 
 		# Connects to RabbitMQ
 		def connect_amqp
-			@amqp = EM::S::AMQP.connect Cartan::Config[:amqp]
-			@channel = EM::S::AMQP::Channel.new(@amqp)
+			open_amqp_channel Cartan::Config[:amqp]
 
-			@channel.fanout(ns "orchestrator")
-			queue = @channel.queue(ns "orchestrator")
-			queue.bind(ns "orchestrator")
-			queue.subscribe { |args| process_orchestra(args[0], args[1]) }
-
-			@orchestra = @channel.fanout(ns "orchestra")
+			get_orchestra
+			subscribe_orchestrator &method(:process_orchestrator)
+			subscribe_private &method(:process_exclusive)
 		end
 
 		# Attempts to gracefully close connections
@@ -80,23 +74,32 @@ module Cartan
 		end
 
 		def monitor
-			EM.add_periodic_timer
+			EM::S.add_periodic_timer(1) {
+				worker = @redis.srandmember workers
+				next if worker.nil?
+
+				send_message worker, "orchestrator.heartbeat"
+				@redis.hset node_hash(worker), "heartbeat", false
+
+				EM::S.add_timer(5) { 
+					heartbeat = @redis.hget(node_hash(worker), "heartbeat") == "true"
+					remove_worker worker unless heartbeat
+				}
+			}
 		end
 
-		# Process new message
+		# Process new message in orchestrator queue.
 		#
 		# @param [AMQP::Header] headers Headers (metadata) associated with this message (for example, routing key).
 	    # @param [String] payload Message body (content). On Ruby 1.9, you may want to check or enforce content encoding.
-		def process_orchestra(headers, payload)
-			message = MessagePack.unpack(payload)
+		def process_orchestrator(headers, payload)
+			message = MP.unpack(payload)
 			Cartan::Log.info "\nType: #{headers.type}\nMessage: #{message}"
 
 			case headers.type
 			when "worker.declare"
 				declare_worker message["uuid"]
 				send_message(message["uuid"], "orchestrator.ack")
-			when "worker.heartbeat"
-				send_message(message["uuid"], "You're alive!!!")
 
 			when "resource.declare"
 				declare_resource message["uuid"]
@@ -108,40 +111,53 @@ module Cartan
 
 		end
 
+		# Process new message in the exclusive queue.
+		#
+		# @param [AMQP::Header] headers Headers (metadata) associated with this message (for example, routing key).
+	    # @param [String] payload Message body (content). On Ruby 1.9, you may want to check or enforce content encoding.
+	    def process_exclusive(headers, payload)
+			message = MP.unpack(payload)
+			Cartan::Log.info "\nType: #{headers.type}\nMessage: #{message}"
+
+			case headers.type
+			when /.*\.heartbeat/
+				@redis.hset node_hash(message["uuid"]), "heartbeat", true
+			end
+	    end
+
 		# Adds the worker to the pool of avaliable workers.
 		#
 		# @param [String] uuid The worker's uuid
 		def declare_worker(uuid)
-			@redis.sadd(ns("worker-pool"), uuid)
+			@redis.sadd(workers, uuid)
 		end
 
 		# Adds the resource to the list of resources.
 		#
 		# @param [String] uuid The resource's uuid
 		def declare_resource(uuid)
-			@redis.sadd(ns("resources"), uuid)
+			@redis.sadd(resources, uuid)
 		end
 
-		# Attempts to retrieve unassigned workers from the worker pool.
+		# Removes a worker from the worker pool
 		#
-		# @param [String]
+		# @param [String] The worker's uuid
+		def remove_worker(uuid)
+			@redis.del node_hash(uuid)
+			@redis.srem workers, uuid
+		end
 
-		# Sends a message to a node.
+		# Removes a resource from the resource pool
 		#
-		# @param [String] uuid The node's uuid
-		# @param [String] type The type of the message to send
-		# @param [String] msg The message to send
-		def send_message(uuid, type, msg = "")
-			@channel.default_exchange.
-				publish(MessagePack.pack( { :uuid => @uuid, :msg => msg } ), 
-						:type => type,
-						:routing_key => ns("message", uuid))
+		# @param [String] The resource's uuid
+		def remove_resource(uuid)
+			@redis.del node_hash(uuid)
+			@redis.srem resources, uuid
 		end
 
-		# Namespaces the list of input arguments.
-		def ns(*words)
-			words.flatten.insert(0, Cartan::Config[:namespace]).join(".")
-		end
+	    def workers; ns @workers; end
+	    def resources; ns @resources; end
+	    def node_hash(uuid); ns uuid; end
 
 	end
 

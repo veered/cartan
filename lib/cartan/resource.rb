@@ -1,27 +1,22 @@
 module Cartan
 
-	class Worker
+	class Resource
 		include Cartan::Mixins::Node, Cartan::Mixins::Messaging
 
 		attr_accessor :uuid, :amqp, :channel, :orchestrator
 
 		state_machine :state, :initial => :initializing do
 			after_transition [:initializing, :recovering] => :connecting, :do => :connect
-			after_transition [:connecting, :working] => :idling, :do => :idle
-			after_transition :idling => :working, :do => :work
+			after_transition :connecting => :harvesting, :do => :harvest
 			after_transition any => :recovering, :do => :recover
-			after_transition [:idling, :working, :recovering] => :disconnecting, :do => :disconnect
+			after_transition [:harvesting, :recovering] => :disconnecting, :do => :disconnect
 
 			event :initialized do
 				transition :initializing => :connecting 
 			end
 
 			event :connected do
-				transition :connecting => :idling 
-			end
-
-			event :work do
-				transition :idling => :working
+				transition :connecting => :harvesting 
 			end
 
 			event :error do
@@ -33,7 +28,7 @@ module Cartan
 			end
 		end
 
-		# Initialize worker.
+		# Initialize node.
 		# 
 		# @param [String] config The path to the configuration file.
 		def initialize(config)
@@ -50,8 +45,9 @@ module Cartan
 		# Connects to RabbitMQ.
 		def connect
 			connect_amqp
-			declare @uuid
+			connect_work
 
+			declare @uuid
 			connected
 		end
 
@@ -64,21 +60,26 @@ module Cartan
 			subscribe_private &method(:process_exclusive)
 		end
 
+		# Connects to work queue
+		def connect_work
+			@work = @channel.fanout ns("resource", uuid)
+			queue = @channel.queue ns("resource", uuid)
+			queue.bind @work
+		end
+
 		# Attempts to gracefully close all connections
 		def disconnect
 			@amqp.close { EM.stop }
 		end
 
-		def idle
-
-		end
-
-		def work
-
+		def harvesting
+			EM::S.add_periodic_timer(1) {
+				send_work("resource.bogus", "Hello")
+			}
 		end
 
 		def process_orchestra(headers, payload)
-
+			
 		end
 
 		def process_exclusive(headers, payload)
@@ -87,15 +88,20 @@ module Cartan
 
 			case headers.type
 			when "orchestrator.heartbeat"
-				send_message message["uuid"], "worker.heartbeat"
+				send_message message["uuid"], "resource.heartbeat"
 			end
 		end
 
 		# Declares the node to the orchestrator
 		#
-		# @param [String] uuid The uuid of the worker to declare
+		# @param [String] uuid The uuid of the node to declare
 		def declare(uuid)
-			send_orchestrator("worker.declare")
+			send_orchestrator("resource.declare")
+		end
+
+		def send_work(type, msg="")
+			@work.publish(MP.pack( { :uuid => @uuid, :msg => msg } ), 
+											:type => type)
 		end
 
 	end

@@ -1,5 +1,6 @@
 
 EM::S = EM::Synchrony	
+MP = MessagePack
 
 class Hash
 	def selectKeys(valid_keys)
@@ -9,7 +10,7 @@ class Hash
 	end
 end
 
-module Cartan
+module Cartan::Mixins
 
 	module Node
 
@@ -21,6 +22,8 @@ module Cartan
 
 			Cartan::Log.loggers << Logger.new(Cartan::Config[:log_location])
 			Cartan::Log.level = Cartan::Config[:log_level]
+
+			@uuid = Cartan::Config[:uuid] || SecureRandom.uuid
 		end
 
 		# Captures signals 
@@ -44,10 +47,12 @@ module Cartan
 
 	module Messaging
 
-		def Messaging.included(other)
-			%w[ ns ].each do |method|
-				raise "#{other} has no method named #{method}" unless other.method? method
-			end
+		# Opens an AMQP connection and channel
+		#
+		# @param [Hash] config The AMQP config to use.
+		def open_amqp_channel(config)
+			@amqp = EM::S::AMQP.connect config
+			@channel = EM::S::AMQP::Channel.new(@amqp)
 		end
 
 
@@ -70,6 +75,8 @@ module Cartan
 				# @param [String] type The type of the message to send
 				# @param [String] msg The message to send
 				def send_#{entity}(type, msg = "")		
+					@#{entity}.publish(MP.pack( { :uuid => @uuid, :msg => msg } ), 
+											:type => type)
 				end
 			EOF
 			module_eval(code, __FILE__, line)
@@ -88,7 +95,7 @@ module Cartan
 		# @param [String] msg The message to send
 		def send_message(uuid, type, msg = "")
 			@channel.default_exchange.
-				publish(MessagePack.pack( { :uuid => @uuid, :msg => msg } ), 
+				publish(MP.pack( { :uuid => @uuid, :msg => msg } ), 
 						:type => type,
 						:routing_key => ns("message", uuid))
 		end

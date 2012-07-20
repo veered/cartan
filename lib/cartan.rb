@@ -4,6 +4,7 @@ require "eventmachine"
 require "em-redis"
 require "em-synchrony"
 require "em-synchrony/amqp"
+require "em-synchrony/em-redis"
 
 require "pry"
 
