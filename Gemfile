@@ -15,7 +15,12 @@ group :development do
   gem "pry"
 end
 
-gem "bunny"
-gem "redis"
-gem "redis-namespace"
+gem "msgpack"
 gem "json"
+gem "mixlib-config"
+gem "thor"
+gem "state_machine"
+gem "eventmachine"
+gem "em-redis"
+gem "em-synchrony"
+gem "amqp"

@@ -1,8 +1,8 @@
 module Cartan
 
-	class Orchestrator
+	class Worker
 
-		attr_accessor :redis, :amqp, :channel, :orchestra
+		attr_accessor :uuid, :amqp, :channel, :orchestrator
 
 		state_machine :state, :initial => :initializing do
 			after_transition [:initializing, :recovering] => :connecting, :do => :connect
@@ -27,7 +27,7 @@ module Cartan
 			end
 		end
 
-		# Initialize orchestrator.
+		# Initialize worker.
 		# 
 		# @param [String] config The path to the configuration file.
 		def initialize(config)
@@ -47,17 +47,12 @@ module Cartan
 			end
 		end
 
-		# Connects to and RabbitMQ.
+		# Connects to RabbitMQ.
 		def connect
-			connect_redis
 			connect_amqp
+			declare @uuid
 
 			connected
-		end
-
-		# Connects to Redis
-		def connect_redis
-			@redis = EM::P::Redis.connect Cartan::Config[:redis]
 		end
 
 		# Connects to RabbitMQ
@@ -65,66 +60,52 @@ module Cartan
 			@amqp = EM::S::AMQP.connect Cartan::Config[:amqp]
 			@channel = EM::S::AMQP::Channel.new(@amqp)
 
-			@channel.fanout(ns "orchestrator")
-			queue = @channel.queue(ns "orchestrator")
-			queue.bind(ns "orchestrator")
-			queue.subscribe { |args| process_orchestra(args[0], args[1]) }
+			@orchestrator = @channel.fanout(ns "orchestrator")
 
 			@orchestra = @channel.fanout(ns "orchestra")
+			queue = @channel.queue(ns "orchestra")
+			queue.bind(ns "orchestra")
+			queue.subscribe { |args| process_broadcast(args[0], args[1]) }
+
+			queue = @channel.queue(ns("message", @uuid), :exclusive => true)
+			queue.subscribe { |args| process_exclusive(args[0], args[1]) }
 		end
 
-		# Attempts to gracefully close connections
+		# Attempts to gracefully close all connections
 		def disconnect
-			@redis.unbind
 			@amqp.close { EM.stop }
 		end
 
 		def monitor
-			EM.add_periodic_timer
+			EM.add_periodic_timer(5) {
+				send_orchestrator("worker.heartbeat", "Hello!")
+			}
 		end
 
-		# Process new message
-		#
-		# @param [AMQP::Header] headers Headers (metadata) associated with this message (for example, routing key).
-	    # @param [String] payload Message body (content). On Ruby 1.9, you may want to check or enforce content encoding.
-		def process_orchestra(headers, payload)
+		def process_broadcast(headers, payload)
+
+		end
+
+		def process_exclusive(headers, payload)
 			message = MessagePack.unpack(payload)
 			Cartan::Log.info "\nType: #{headers.type}\nMessage: #{message}"
-
-			case headers.type
-			when "worker.declare"
-				declare_worker message["uuid"]
-				send_message(message["uuid"], "orchestrator.ack")
-			when "worker.heartbeat"
-				send_message(message["uuid"], "You're alive!!!")
-
-			when "resource.declare"
-				declare_resource message["uuid"]
-				send_message message["uuid"], "orchestrator.config", { :redis => Cartan::Config[:redis] }
-			when "resource.request_workers"
-				workers = get_workers message["workers"]
-				send_message message["uuid"], "orchestrator.assign", { :workers => workers }
-			end
-
 		end
 
-		# Adds the worker to the pool of avaliable workers.
+		# Declares the worker to the orchestrator
 		#
-		# @param [String] uuid The worker's uuid
-		def declare_worker(uuid)
-			@redis.sadd(ns("worker-pool"), uuid)
+		# @param [String] uuid The uuid of the worker to declare
+		def declare(uuid)
+			send_orchestrator("worker.declare")
 		end
 
-		# Adds the resource to the list of resources.
-		#
-		# @param [String] uuid The resource's uuid
-		def declare_resource(uuid)
-			@redis.sadd(ns("resources"), uuid)
+		# Sends a message to the orchestrator
+		# 
+		# @param [String] type The type of the message to send
+		# @param [String] msg The message to send
+		def send_orchestrator(type, msg = "")		
+			@orchestrator.publish(MessagePack.pack( { :uuid => @uuid, :msg => msg } ), 
+									:type => type)
 		end
-
-		# Attempts to retrieve unassigned workers from the worker pool.
-		#
-		# @param [String]
 
 		# Sends a message to a node.
 		#

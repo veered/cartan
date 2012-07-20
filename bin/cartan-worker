@@ -1,0 +1,18 @@
+#!/usr/bin/env ruby
+$LOAD_PATH.unshift File.dirname(__FILE__) + '/../lib'
+
+require 'cartan'
+require 'thor'
+
+class CartanWorker < Thor
+
+	desc "start", "Start the worker."
+	method_option :config, :type => :string, :aliases => "-c",
+				  :desc => "The path of the config file."
+	def start
+		orchestrator = Cartan::Worker.new options[:config]
+	end
+
+end
+
+CartanWorker.start

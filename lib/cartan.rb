@@ -1,5 +1,16 @@
-require "cartan/helper"
-require "cartan/orchestrator"
-require "cartan/rabbit-worker"
+require "msgpack"
+require "state_machine"
+require "eventmachine"
+require "em-redis"
+require "em-synchrony"
+require "em-synchrony/amqp"
 
 require "pry"
+
+require "cartan/log"
+require "cartan/helper"
+require "cartan/config"
+require "cartan/orchestrator"
+require "cartan/worker"
+
+
