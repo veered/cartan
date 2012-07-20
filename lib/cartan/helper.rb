@@ -56,7 +56,7 @@ module Cartan::Mixins
 		end
 
 
-		%w[ orchestra orchestrator ].each do |entity|
+		%w[ foreman crew ].each do |entity|
 			line = __LINE__ + 2
 			code = <<-EOF
 				def get_#{entity}

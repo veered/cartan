@@ -4,15 +4,15 @@ $LOAD_PATH.unshift File.dirname(__FILE__) + '/../lib'
 require 'cartan'
 require 'thor'
 
-class CartanOrchestrator < Thor
+class CartanResource < Thor
 
-	desc "start", "Start the orchestrator."
+	desc "start", "Start the resource."
 	method_option :config, :type => :string, :aliases => "-c",
 				  :desc => "The path of the config file."
 	def start
-		orchestrator = Cartan::Orchestrator.new options[:config]
+		orchestrator = Cartan::Resource.new options[:config]
 	end
 
 end
 
-CartanOrchestrator.start
+CartanResource.start

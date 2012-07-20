@@ -11,7 +11,7 @@ require "pry"
 require "cartan/log"
 require "cartan/helper"
 require "cartan/config"
-require "cartan/orchestrator"
+require "cartan/foreman"
 require "cartan/worker"
 
 

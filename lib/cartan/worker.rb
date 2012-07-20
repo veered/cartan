@@ -3,7 +3,7 @@ module Cartan
 	class Worker
 		include Cartan::Mixins::Node, Cartan::Mixins::Messaging
 
-		attr_accessor :uuid, :amqp, :channel, :orchestrator
+		attr_accessor :uuid, :amqp, :channel, :foreman
 
 		state_machine :state, :initial => :initializing do
 			after_transition [:initializing, :recovering] => :connecting, :do => :connect
@@ -33,7 +33,7 @@ module Cartan
 			end
 		end
 
-		# Initialize worker.
+		# Initialize node.
 		# 
 		# @param [String] config The path to the configuration file.
 		def initialize(config)
@@ -59,8 +59,8 @@ module Cartan
 		def connect_amqp
 			open_amqp_channel Cartan::Config[:amqp]
 
-			get_orchestrator
-			subscribe_orchestra &method(:process_orchestra)
+			get_foreman
+			subscribe_crew &method(:process_crew)
 			subscribe_private &method(:process_exclusive)
 		end
 
@@ -77,7 +77,7 @@ module Cartan
 
 		end
 
-		def process_orchestra(headers, payload)
+		def process_crew(headers, payload)
 
 		end
 
@@ -86,16 +86,16 @@ module Cartan
 			Cartan::Log.info "\nType: #{headers.type}\nMessage: #{message}"
 
 			case headers.type
-			when "orchestrator.heartbeat"
+			when "foreman.heartbeat"
 				send_message message["uuid"], "worker.heartbeat"
 			end
 		end
 
-		# Declares the node to the orchestrator
+		# Declares the node to the foreman
 		#
-		# @param [String] uuid The uuid of the worker to declare
+		# @param [String] uuid The uuid of the node to declare
 		def declare(uuid)
-			send_orchestrator("worker.declare")
+			send_foreman("worker.declare")
 		end
 
 	end

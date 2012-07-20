@@ -1,9 +1,9 @@
 module Cartan
 
-	class Orchestrator
+	class Foreman
 		include Cartan::Mixins::Node, Cartan::Mixins::Messaging
 
-		attr_accessor :uuid, :redis, :amqp, :channel, :orchestra
+		attr_accessor :uuid, :redis, :amqp, :channel, :crew
 
 		state_machine :state, :initial => :initializing do
 			after_transition [:initializing, :recovering] => :connecting, :do => :connect
@@ -62,8 +62,8 @@ module Cartan
 		def connect_amqp
 			open_amqp_channel Cartan::Config[:amqp]
 
-			get_orchestra
-			subscribe_orchestrator &method(:process_orchestrator)
+			get_crew
+			subscribe_foreman &method(:process_foreman)
 			subscribe_private &method(:process_exclusive)
 		end
 
@@ -78,7 +78,7 @@ module Cartan
 				worker = @redis.srandmember workers
 				next if worker.nil?
 
-				send_message worker, "orchestrator.heartbeat"
+				send_message worker, "foreman.heartbeat"
 				@redis.hset node_hash(worker), "heartbeat", false
 
 				EM::S.add_timer(5) { 
@@ -88,25 +88,25 @@ module Cartan
 			}
 		end
 
-		# Process new message in orchestrator queue.
+		# Process new message in foreman queue.
 		#
 		# @param [AMQP::Header] headers Headers (metadata) associated with this message (for example, routing key).
 	    # @param [String] payload Message body (content). On Ruby 1.9, you may want to check or enforce content encoding.
-		def process_orchestrator(headers, payload)
+		def process_foreman(headers, payload)
 			message = MP.unpack(payload)
 			Cartan::Log.info "\nType: #{headers.type}\nMessage: #{message}"
 
 			case headers.type
 			when "worker.declare"
 				declare_worker message["uuid"]
-				send_message(message["uuid"], "orchestrator.ack")
+				send_message(message["uuid"], "foreman.ack")
 
 			when "resource.declare"
 				declare_resource message["uuid"]
-				send_message message["uuid"], "orchestrator.config", { :redis => Cartan::Config[:redis] }
+				send_message message["uuid"], "foreman.config", { :redis => Cartan::Config[:redis] }
 			when "resource.request_workers"
 				workers = get_workers message["workers"]
-				send_message message["uuid"], "orchestrator.assign", { :workers => workers }
+				send_message message["uuid"], "foreman.assign", { :workers => workers }
 			end
 
 		end
