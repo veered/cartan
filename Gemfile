@@ -18,3 +18,5 @@ end
 
 gem "json"
 gem "mixlib-log"
+gem "state_machine"
+gem "em-synchrony"
