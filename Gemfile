@@ -15,14 +15,3 @@ group :development do
   gem "pry"
   gem "debugger"
 end
-
-gem "msgpack"
-gem "json"
-gem "mixlib-log"
-gem "thor"
-gem "state_machine"
-gem "redis"
-gem "hiredis"
-gem "redis-namespace"
-gem "em-synchrony", "~> 1.0.2"
-gem "amqp"
