@@ -17,3 +17,4 @@ group :development do
 end
 
 gem "json"
+gem "mixlib-log"
