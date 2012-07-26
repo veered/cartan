@@ -4,6 +4,8 @@ $LOAD_PATH.unshift File.dirname(__FILE__) + '/../lib'
 require 'cartan'
 require 'thor'
 
+require 'bunny'
+
 class CartanForeman < Thor
 
 	desc "start", "Start the foreman."
@@ -12,6 +14,34 @@ class CartanForeman < Thor
 	def start
 		foreman = Cartan::Foreman.new options[:config]
 	end
+
+	desc "debug", "Launch a pry instance."
+	def debug
+		bunny = Bunny.new
+		bunny.start
+		foreman = bunny.exchange("cartan.foreman", :type => :fanout)
+		foreman.publish(MessagePack.pack(""), :type => "command.debug")
+	end
+
+	desc "debug", "Launch a pry instance."
+	def debug
+		cmd("command.debug")
+	end
+
+	desc "status", "Force the foreman to log its status."
+	def status
+		cmd("command.status")
+	end
+
+	no_tasks do
+		def cmd(type, msg="")
+			bunny = Bunny.new
+			bunny.start
+			foreman = bunny.exchange("cartan.foreman", :type => :fanout)
+			foreman.publish(MessagePack.pack(msg), :type => type)
+		end
+	end
+
 
 end
 

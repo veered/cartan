@@ -10,7 +10,7 @@ class CartanResource < Thor
 	method_option :config, :type => :string, :aliases => "-c",
 				  :desc => "The path of the config file."
 	def start
-		orchestrator = Cartan::Resource.new options[:config]
+		resource = Cartan::Resource.new options[:config]
 	end
 
 end
