@@ -4,6 +4,6 @@ module Cartan
   VERSION = 0.1
 end
 
-require 'config'
+require 'cartan/config'
 
-require 'node'
+require 'cartan/node'
