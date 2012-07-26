@@ -15,3 +15,5 @@ group :development do
   gem "pry"
   gem "debugger"
 end
+
+gem "json"
