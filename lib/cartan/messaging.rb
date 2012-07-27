@@ -7,7 +7,7 @@ module Cartan
 
   # A service for sending and receiving messages.
   class Messaging
-    attr_accessor :amqp, :channel
+    attr_accessor :amqp, :channel, :exchange
 
     MP = MessagePack
     AMQP = EM::Synchrony::AMQP
@@ -34,7 +34,7 @@ module Cartan
 
       @amqp = AMQP.connect(@config)
       @channel = AMQP::Channel.new(@amqp)
-      @exchange = @channel.direct(@namespace)
+      @exchange = @channel.direct(@namespace, :auto_delete => true)
 
     end
 
@@ -52,8 +52,8 @@ module Cartan
     # new messages
     # @param [Hash] config Queue creations options.
     def subscribe(name, handler, config = {})
-      queue = @channel.queue(ns(name), config)
-      queue.bind(@exchange) 
+      queue = @channel.queue(ns(name), {:auto_delete => true}.merge!(config))
+      queue.bind(@exchange, :routing_key => ns(name)) 
 
       queue.subscribe do |headers, payload|
         decoded = MP.unpack(payload)
@@ -69,7 +69,8 @@ module Cartan
     # @param [String] name The name of the queue to unsubscribe from.
     def unsubscribe(name)
       if subscriptions.has_key? name
-        subscriptions[name].unsubscribe
+        subscriptions[name].unsubscribe(:nowait => false)
+        subscriptions.delete(name)
       end
     end
 
@@ -109,7 +110,6 @@ module Cartan
     def exclusive(uuid)
       jn("exclusive", uuid)
     end
-
 
     # Joins together words with a period.
     #
