@@ -35,6 +35,12 @@ describe "Messaging" do
 
   end
 
+  it "should throw an error if the EM reactor isn't running" do
+    lambda {
+      @msg.start
+    }.should raise_error
+  end
+
   it "should be able to connect to and disconnect from amqp" do
     EM.synchrony do
 
@@ -73,15 +79,14 @@ describe "Messaging" do
     end
   end
 
-  it "should be able to subscribe to and unsubscribe from queues" do
+  it "should be able to add and remove handlers to queues and deal with unsubscriptions." do
     sync do
 
       node = OpenStruct.new
       node.message_received = false
 
-      message_received = false
       handler = Cartan::MessageHandler.new(node, proc{ :default }) do
-        state(:default) do |uuid, label, message|
+        handle(/.*/, :default) do |uuid, label, message|
 
           uuid.should == "123"
           label.should == "test"
@@ -91,18 +96,54 @@ describe "Messaging" do
         end
       end
 
-      @msg.subscribe("manny", handler)
+      @msg.add_handler("manny", handler)
 
       @msg.send_message("manny", "test", "test")
       EM::Synchrony.sleep(0.5)
       node.message_received.should be_true
 
+      @msg.remove_handler("manny", handler)
+      node.message_received = false
+
+      @msg.send_message("manny", "haha", "sup")
+      EM::Synchrony.sleep(0.5)
+      node.message_received.should be_false
+
+      @msg.add_handler("manny", handler)
       @msg.unsubscribe("manny")
       node.message_received = false
 
       @msg.send_message("manny", "haha", "sup")
       EM::Synchrony.sleep(0.5)
       node.message_received.should be_false
+    end
+  end
+
+  it "should be able to add multiple handlers" do
+    sync do
+
+      node = OpenStruct.new
+      node.responses = []
+
+      handlers = []
+      10.times do
+        handlers << Cartan::MessageHandler.new(node, proc{ :running }) do
+          handle(/heartbeat/, :running) do |uuid, label, message|
+
+            uuid.should == "123"
+            label.should == "heartbeat"
+            message.should == "test"
+
+            @node.responses << true
+          end
+        end
+
+        @msg.add_handler("darling", handlers.last)
+      end
+
+      @msg.send_message("darling", "heartbeat", "test")
+      EM::Synchrony.sleep(0.5)
+      node.responses.size.should == 10
     end
   end
 

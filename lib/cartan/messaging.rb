@@ -12,6 +12,8 @@ module Cartan
     MP = MessagePack
     AMQP = EM::Synchrony::AMQP
 
+    HandlerCollection = Struct.new(:queue, :handlers)
+
     # Initializes a messaging service.
     #
     # @param [String] uuid The uuid of the node attached to.
@@ -48,20 +50,21 @@ module Cartan
     # Creates and subscribes to queue.
     #
     # @param [String] name The name of the queue to subscribe to.
-    # @param [Cartan::MessageHandler] handler The handler that will receive all 
-    # new messages
     # @param [Hash] config Queue creations options.
-    def subscribe(name, handler, config = {})
+    def subscribe(name, config = {})
+      return if subscriptions.has_key? name
+
       queue = @channel.queue(ns(name), {:auto_delete => true}.merge!(config))
       queue.bind(@exchange, :routing_key => ns(name)) 
 
       queue.subscribe do |headers, payload|
         decoded = MP.unpack(payload)
-        handler.receive(decoded["uuid"], headers.type, decoded["msg"])
+        subscriptions[name].handlers.each do |h|
+          h.receive(decoded["uuid"], headers.type, decoded["msg"])
+        end
       end
 
-      unsubscribe name
-      subscriptions[name] = queue
+      subscriptions[name] = HandlerCollection.new(queue, [])
     end
 
     # Unsubscribes from a queue.
@@ -69,9 +72,29 @@ module Cartan
     # @param [String] name The name of the queue to unsubscribe from.
     def unsubscribe(name)
       if subscriptions.has_key? name
-        subscriptions[name].unsubscribe(:nowait => false)
+        subscriptions[name].queue.unsubscribe(:nowait => false)
         subscriptions.delete(name)
       end
+    end
+
+    # Attach a message handler to a queue. Creates and subscribes to the queue if
+    # it doesn't already exist.
+    #
+    # @param [String] name The name of the queue to attach the handler to.
+    # @param [Cartan::MessageHandler] handler The handler that will receive all 
+    # new messages
+    def add_handler(name, handler)
+      subscribe(name)
+      subscriptions[name].handlers << handler
+    end
+
+    # Removes the handler from the queue.
+    #
+    # @param [String] name The name of the queue from which to remove the handler.
+    # @param [Cartan::MessageHandler] handler The handler to remove
+    def remove_handler(name, handler)
+      return unless subscriptions.has_key? name
+      subscriptions[name].handlers.delete(handler)
     end
 
     # Sends a message to a queue.
@@ -90,8 +113,11 @@ module Cartan
     end
 
     # Creates and subscribes to this node's exclusive queue.
-    def subscribe_exclusive(handler)
-      subscribe(exclusive(@uuid), handler, :exclusive => true)
+    def handle_exclusive(handler)
+      name = exclusive(@uuid)
+
+      subscribe(name, :exclusive => true)
+      add_handler(name, handler)
     end
 
     # Sends a message to a node's exclusive queue.
