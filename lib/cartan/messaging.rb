@@ -1,6 +1,8 @@
 require 'em-synchrony/amqp'
 require 'msgpack'
 
+require 'cartan/message-handler'
+
 module Cartan
 
   # A service for sending and receiving messages.
