@@ -3,17 +3,19 @@ module Cartan
   # A helper for performing stateful message routing.
   class MessageHandler
 
+    Handler = Struct.new(:pattern, :hook)
+
     # Initializes a MessageHandler instance.
     #
     # @param [Cartan::Node] node The node that this message handler is attached to.
     # @param [Callable] node A callable which returns the current state.
     # @yield [] (see Cartan::MessageHandler::handle) A block of code to be 
     # evaluated in the context of the handler.
-    def initialize(node, state = proc{ "none" }, &block)
+    def initialize(node, state = proc{ none }, &block)
       @node = node
       @state = state
 
-      handle(&block) if block_given?
+      bind(&block) if block_given?
     end
 
     # The message handler hook. Decides which handler(s) to use based on the
@@ -23,24 +25,37 @@ module Cartan
     def receive(uuid, label, message)
       current_state = @state.call
       
-      states[current_state].call(uuid, label, message) if states.has_key? current_state
-      states[all].call(uuid, label, message) if states.has_key? all
+      find_matches(label, states[current_state]).each do |h| 
+        h.hook.call(uuid, label, message)
+      end
+
+      find_matches(label, states[all]).each do |h| 
+        h.hook.call(uuid, label, message)
+      end
     end
 
     # Evaluates the block in the context of the handler. This is where messages
     # are handled
-    def handle(&block)
+    def bind(&block)
       instance_eval(&block) if block_given?
     end
 
-    # Defines a new message handler, dependent on the current state.
-    def state(which_state, &block)
-      unless which_state.is_a?(Symbol) or which_state == all
-        raise Cartan::Exception::InvalidState,
-          "The state provided was not a symbol or all!"
-      end
+    # Defines a new message handler, dependent on the given states.
+    # 
+    # @param [String Regexp] pattern The message label to handle
+    # @param [Symbol Array] which_states The states to handle
+    # @yield The block to be executed on any handled message.
+    def handle(pattern, which_states = all, &block)
+      handler = Handler.new(Regexp.new(pattern), block)
+      [*which_states].each do |s|
+        unless valid_state?(s)
+          raise Cartan::Exception::InvalidState,
+            "The state '#{s}'' was not a symbol or all!"
+        end
 
-      states[which_state] = block
+        states[s] ||= []
+        states[s] << handler
+      end
     end
 
     def states
@@ -50,6 +65,20 @@ module Cartan
     def all
       "all"
     end
+
+    def none
+      "none"
+    end
+
+    private
+
+      def find_matches(label, handlers)
+        [*handlers].select{ |h| label =~ h.pattern }
+      end
+
+      def valid_state?(state)
+        state.is_a?(Symbol) or state == all
+      end
 
   end
 

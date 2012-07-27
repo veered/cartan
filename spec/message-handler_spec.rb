@@ -11,27 +11,28 @@ describe "MessageHandler" do
   end
 
   it "should be able to set hooks on initialization" do
-    @handler = Cartan::MessageHandler.new(self, proc{ :default}) do
-      state(:default) {}
+    @handler = Cartan::MessageHandler.new(self, proc{ :default }) do
+      handle("", :default) {}
     end
 
     @handler.states.has_key?(:default).should be_true
   end
 
-  it "should be able to set hooks on handle" do
+  it "should be able to set hooks on bind" do
     @handler = Cartan::MessageHandler.new(self, proc{ :default})
-    @handler.handle do
-      state(:default) {}
+    @handler.bind do
+      handle("", :default) {}
     end
 
     @handler.states.has_key?(:default).should be_true
   end
 
   it "should call its hooks" do
-    self.message_received = false
+    node = OpenStruct.new
+    node.message_received = false
 
-    @handler = Cartan::MessageHandler.new(self, proc{ :default}) do
-      state(:default) do |uuid, label, message|
+    @handler = Cartan::MessageHandler.new(node, proc{ :default }) do
+      handle("hello", :default) do |uuid, label, message|
         uuid.should == "2"
         label.should == "hello"
         message.should == "sup"
@@ -41,14 +42,15 @@ describe "MessageHandler" do
     end
 
     @handler.receive("2", "hello", "sup")
-    self.message_received.should be_true
+    node.message_received.should be_true
   end
 
   it "should call the all hook" do
-    self.message_received = false
+    node = OpenStruct.new
+    node.message_received = false
 
-    @handler = Cartan::MessageHandler.new(self, proc{ :default}) do
-      state(all) do |uuid, label, message|
+    @handler = Cartan::MessageHandler.new(node, proc{ :default}) do
+      handle(/car.*n/) do |uuid, label, message|
         uuid.should == "bleh"
         label.should == "cartcartan"
         message.should == { :meh => :meh }
@@ -58,21 +60,35 @@ describe "MessageHandler" do
     end
 
     @handler.receive("bleh", "cartcartan", { :meh => :meh })
-    self.message_received.should be_true
+    node.message_received.should be_true
+  end
+
+  it "should reject invalid states" do
+
+    lambda {
+      @handler = Cartan::MessageHandler.new(self) do
+        handle //, "asdf" do |uuid, label, message|
+
+        end
+      end
+    }.should raise_error
+
   end
 
   it "should pass stress test #1" do
     state = :blimey
-    self.message_received = false
-    self.all_message = false
 
-    @handler = Cartan::MessageHandler.new(self, proc{ state }) do
+    node = OpenStruct.new
+    node.message_received = false
+    node.all_message = false
 
-      state(all) do |uuid, label, message|
+    @handler = Cartan::MessageHandler.new(node, proc{ state }) do
+
+      handle(/.*/) do |uuid, label, message|
         @node.all_message = true
       end
 
-      state(:blimey) do |uuid, label, message|
+      handle(/.*/, [:blimey, :arg]) do |uuid, label, message|
         uuid.should == "blimey"
         label.should == "blimey"
         message.should == "blimey"
@@ -80,7 +96,7 @@ describe "MessageHandler" do
         @node.message_received = true
       end
 
-      state(:dark) do |uuid, label, message|
+      handle(/.*/, [:dark, :night]) do |uuid, label, message|
         uuid.should == "dark"
         label.should == "dark"
         message.should == "dark"
@@ -90,20 +106,27 @@ describe "MessageHandler" do
     end
 
     @handler.receive("blimey", "blimey", "blimey")
-    self.message_received.should be_true
-    self.all_message.should be_true
+    node.message_received.should be_true
+    node.all_message.should be_true
 
-    self.message_received = false
-    self.all_message = false
+    node.message_received = false
+    node.all_message = false
+    state = :arg
+    @handler.receive("blimey","blimey","blimey")
+    node.message_received.should be_true
+    node.all_message.should be_true
+
+    node.message_received = false
+    node.all_message = false
     state = :unknown
     @handler.receive("","","")
-    self.message_received.should be_false
-    self.all_message.should be_true
+    node.message_received.should be_false
+    node.all_message.should be_true
 
-    self.message_received = false
+    node.message_received = false
     state = :dark
     @handler.receive("dark","dark","dark")
-    self.message_received.should be_true
+    node.message_received.should be_true
   end
 
 end
