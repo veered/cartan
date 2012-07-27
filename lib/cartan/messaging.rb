@@ -119,7 +119,7 @@ module Cartan
         words.flatten.join(".")
       end
 
-      # Similar to jn but add the namespace in the front.
+      # Similar to jn but adds the namespace in the front.
       def ns(*words)
         jn(@namespace, words)
       end
