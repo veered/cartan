@@ -76,10 +76,12 @@ module Cartan
     def capture_signals
       %w[ TERM INT QUIT HUP ].each do |signal|
         Signal.trap(signal) { 
+
           EM::Synchrony.next_tick do
             Cartan::Log.error "SIG#{signal} received, stopping."
             stop if running?
           end
+          
         }
       end
     end
