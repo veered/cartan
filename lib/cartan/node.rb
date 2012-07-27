@@ -13,8 +13,11 @@ module Cartan
 
     # A state machine that drives the node
     state_machine :node_state, :initial => :idle do
-      trans :idle, :started!, :running, :run
-      trans :running, :stopped!, :idle, :quit
+      before_transition :idle => :running, :do => :run
+      before_transition :running => :idle, :do => :quit
+
+      event(:started!) { transition :idle => :running }
+      event(:stopped!) { transition :running => :idle }
     end
 
     # Initializes the node
