@@ -16,8 +16,9 @@ group :development do
   gem "debugger"
 end
 
-gem "json"
-gem "mixlib-log"
-gem "state_machine"
-gem "em-synchrony"
-gem "msgpack"
+gem "json", "~> 1.7.4"
+gem "mixlib-log", "~> 1.4.1"
+gem "state_machine", "~> 1.1.2"
+gem "amqp", "~> 0.9.7"
+gem "em-synchrony", "~> 1.0.2"
+gem "msgpack", "~> 0.4.7"
