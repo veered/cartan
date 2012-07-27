@@ -110,19 +110,18 @@ module Cartan
       jn("exclusive", uuid)
     end
 
-    private
 
-      # Joins together words with a period.
-      #
-      # @param [String] *words The words to join together.
-      def jn(*words)
-        words.flatten.join(".")
-      end
+    # Joins together words with a period.
+    #
+    # @param [String] *words The words to join together.
+    def jn(*words)
+      words.flatten.join(".")
+    end
 
-      # Similar to jn but adds the namespace in the front.
-      def ns(*words)
-        jn(@namespace, words)
-      end
+    # Similar to jn but adds the namespace in the front.
+    def ns(*words)
+      jn(@namespace, words)
+    end
 
   end
 
