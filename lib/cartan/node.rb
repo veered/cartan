@@ -42,7 +42,7 @@ module Cartan
         @msg = Cartan::Messaging.new(@uuid, @config[:namespace], @config[:amqp])
         @msg.start
 
-        @msg.subscribe_exclusive(exclusive_handler)
+        @msg.handle_exclusive(exclusive_handler)
 
         started!
         yield if block_given?
@@ -81,7 +81,7 @@ module Cartan
             Cartan::Log.error "SIG#{signal} received, stopping."
             stop if running?
           end
-          
+
         }
       end
     end
@@ -99,13 +99,8 @@ module Cartan
     def exclusive_handler
       @exclusive_handler ||= Cartan::MessageHandler.new(self, proc{ node_state.to_sym }) do
 
-        state :running do |uuid, label, message|
-
-          case label
-          when "heartbeat"
+        handle "heartbeat", :running do |uuid, label, message|
             @node.msg.send_node(uuid, "heartbeat.response", @node.info)
-          end
-
         end
 
       end

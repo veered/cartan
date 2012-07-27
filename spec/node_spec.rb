@@ -59,7 +59,7 @@ describe "Cartan::Node" do
       msg.start
 
       handler = Cartan::MessageHandler.new(myNode, proc{ :ready }) do
-        state :ready do |uuid, label, message|
+        handle "heartbeat.response", :ready do |uuid, label, message|
 
           uuid.should == @node.otherUUID
           label.should == "heartbeat.response"
@@ -69,7 +69,7 @@ describe "Cartan::Node" do
         end
       end
 
-      msg.subscribe_exclusive(handler)
+      msg.handle_exclusive(handler)
       msg.send_node(@node.uuid, "heartbeat")     
 
       EM::Synchrony.sleep(0.5) 
