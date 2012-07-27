@@ -21,7 +21,7 @@ module Cartan
     # 
     # @see Cartan::Messaging#subscribe Clarifies what the parameters mean.
     def receive(uuid, label, message)
-      current_state = state.call
+      current_state = @state.call
 
       states[current_state].call(uuid, label, message) if states.has_key? current_state
       states[all].call(uuid, label, message) if states.has_key? all
@@ -35,7 +35,7 @@ module Cartan
 
     # Defines a new message handler, dependent on the current state.
     def state(which_state, &block)
-      unless which_state.is_a?(Symbol) or which_state == all?
+      unless which_state.is_a?(Symbol) or which_state == all
         raise Cartan::Exception::InvalidState,
           "The state provided was not a symbol or all!"
       end
