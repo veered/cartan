@@ -15,11 +15,11 @@ module Cartan
     # Initializes a messaging service.
     #
     # @param [String] uuid The uuid of the node attached to.
-    # @param [String] exchange The name of the exchange to operate under.
+    # @param [String] namespace The name of the namespace to operate under.
     # @param [Hash] config AMQP configuration settings.
-    def initialize(uuid, exchange = "", config = {})
+    def initialize(uuid, namespace = "", config = {})
       @uuid = uuid
-      @exchange_name = exchange
+      @namespace = namespace
       @config = config
     end
 
@@ -34,7 +34,7 @@ module Cartan
 
       @amqp = AMQP.connect(@config)
       @channel = AMQP::Channel.new(@amqp)
-      @exchange = @channel.fanout(@exchange_name)
+      @exchange = @channel.direct(@namespace)
 
     end
 
@@ -52,7 +52,7 @@ module Cartan
     # new messages
     # @param [Hash] config Queue creations options.
     def subscribe(name, handler, config = {})
-      queue = @channel.queue(name, config)
+      queue = @channel.queue(ns(name), config)
       queue.bind(@exchange) 
 
       queue.subscribe do |headers, payload|
@@ -80,7 +80,7 @@ module Cartan
     # @param [String Hash] message The message to send.
     def send_message(name, label, message)
       encoded = MP.pack({ :uuid => @uuid, :msg => message })
-      @exchange.publish(encoded, :type => jn(label), :routing_key => name)
+      @exchange.publish(encoded, :type => label, :routing_key => ns(name))
     end
 
     # A hash of all the maintained subscriptions.
@@ -117,6 +117,11 @@ module Cartan
       # @param [String] *words The words to join together.
       def jn(*words)
         words.flatten.join(".")
+      end
+
+      # Similar to jn but add the namespace in the front.
+      def ns(*words)
+        jn(@namespace, words)
       end
 
   end
