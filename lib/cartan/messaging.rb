@@ -40,7 +40,7 @@ module Cartan
 
     # Stops the messaging service.
     def stop
-      @subscriptions.each { |n, v| unsubscribe(n) }
+      subscriptions.each { |n, v| unsubscribe(n) }
 
       @amqp.close
     end
@@ -61,15 +61,15 @@ module Cartan
       end
 
       unsubscribe name
-      @subscriptions[name] = queue
+      subscriptions[name] = queue
     end
 
     # Unsubscribes from a queue.
     #
     # @param [String] name The name of the queue to unsubscribe from.
     def unsubscribe(name)
-      if @subscriptions.has_key? name
-        @subscriptions[name].unsubscribe
+      if subscriptions.has_key? name
+        subscriptions[name].unsubscribe
       end
     end
 
