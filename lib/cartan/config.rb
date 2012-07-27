@@ -21,6 +21,8 @@ module Cartan
       self[:redis] = {}
       self[:amqp] = {}
 
+      self[:foreman] = "foreman"
+
       self.merge!(config)
     end
 
