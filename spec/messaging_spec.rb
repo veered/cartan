@@ -94,14 +94,14 @@ describe "Messaging" do
       @msg.subscribe("manny", handler)
 
       @msg.send_message("manny", "test", "test")
-      EM::Synchrony.sleep(1)
+      EM::Synchrony.sleep(0.5)
       node.message_received.should be_true
 
       @msg.unsubscribe("manny")
       node.message_received = false
 
       @msg.send_message("manny", "haha", "sup")
-      EM::Synchrony.sleep(1)
+      EM::Synchrony.sleep(0.5)
       node.message_received.should be_false
     end
   end

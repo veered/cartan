@@ -13,13 +13,15 @@ module Cartan
     end
 
     # Set config defaults
-    def initialize
+    def initialize(config = {})
       self[:log_level] = :info
-      self[:log_location] = STDOUT
+      self[:log_location] = $stdout
 
       self[:namespace] = "cartan"
       self[:redis] = {}
       self[:amqp] = {}
+
+      self.merge!(config)
     end
 
   end

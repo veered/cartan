@@ -22,7 +22,7 @@ module Cartan
     # @see Cartan::Messaging#subscribe Clarifies what the parameters mean.
     def receive(uuid, label, message)
       current_state = @state.call
-
+      
       states[current_state].call(uuid, label, message) if states.has_key? current_state
       states[all].call(uuid, label, message) if states.has_key? all
     end

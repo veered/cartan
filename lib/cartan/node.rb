@@ -44,8 +44,8 @@ module Cartan
 
         @msg.subscribe_exclusive(exclusive_handler)
 
-        yield if block_given?
         started!
+        yield if block_given?
       end
     end
 
@@ -53,35 +53,40 @@ module Cartan
     #
     # @yield [] A block to be run after the event loop has been stopped.
     def stop
+      yield if block_given?
       @msg.stop
       EM.stop
 
-      yield if block_given?
       stopped!
     end
 
     # A node's event loop
     def run; end
 
+    # Actions to be taken on node exit
+    def quit; end
+
     # Configures logging for this node based of the config.
     def setup_logging
-      Cartan::Log.loggers << Logger.new(Cartan::Config[:log_location])
-      Cartan::Log.level = Cartan::Config[:log_level]
+      Cartan::Log.loggers << Logger.new(@config[:log_location])
+      Cartan::Log.level = @config[:log_level]
     end
 
     # Captures interupt signals for this process and stops the node.
     def capture_signals
       %w[ TERM INT QUIT HUP ].each do |signal|
         Signal.trap(signal) { 
-          Cartan::Log.error "SIG#{signal} received, stopping."
-          stop if running?
+          EM::Synchrony.next_tick do
+            Cartan::Log.error "SIG#{signal} received, stopping."
+            stop if running?
+          end
         }
       end
     end
 
     # Convenience method for identifying node types.
     def type
-      self.class.name
+      self.class.name.split("::").last
     end
 
     # A hash containing info about this node
@@ -90,7 +95,7 @@ module Cartan
     end
 
     def exclusive_handler
-      @exclusive_handler ||= Cartan::MessageHandler.new(self, proc{ node_state }) do
+      @exclusive_handler ||= Cartan::MessageHandler.new(self, proc{ node_state.to_sym }) do
 
         state :running do |uuid, label, message|
 

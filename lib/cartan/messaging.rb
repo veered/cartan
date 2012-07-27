@@ -79,7 +79,7 @@ module Cartan
     # @param [String] name The name of the queue to send the message to.
     # @param [String] label The message label.
     # @param [String Hash] message The message to send.
-    def send_message(name, label, message)
+    def send_message(name, label, message = "")
       encoded = MP.pack({ :uuid => @uuid, :msg => message })
       @exchange.publish(encoded, :type => label, :routing_key => ns(name))
     end
@@ -100,7 +100,7 @@ module Cartan
     # @param [String] The uuid of the node to message.
     # @param [String] label
     # @param [String Hash] message
-    def send_node(uuid, label, message)
+    def send_node(uuid, label, message = "")
       send_message(exclusive(uuid), label, message)
     end
 

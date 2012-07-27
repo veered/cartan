@@ -5,5 +5,6 @@ module Cartan
 end
 
 require 'cartan/config'
+require 'cartan/log'
 
 require 'cartan/node'
