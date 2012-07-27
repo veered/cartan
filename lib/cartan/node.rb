@@ -9,7 +9,7 @@ module Cartan
   # Base class for all nodes on the network. Manages event loop and provides a
   # messaging service.
   class Node
-    attr_accessor :config
+    attr_accessor :config, :uuid, :msg
 
     # A state machine that drives the node
     state_machine :node_state, :initial => :idle do
@@ -23,7 +23,7 @@ module Cartan
     # Initializes the node
     #
     # @param [Hash] config A hash-like object containing this node's
-    #                      configuration settings
+    # configuration settings
     def initialize(config)
       super() # Initializes the state machine
 
@@ -39,7 +39,10 @@ module Cartan
     # @yield [] A block to be run in the event loop.
     def start
       EM.synchrony do
-        @msg = Cartan::Messaging.new(@config[:namespace], @config[:amqp]).start
+        @msg = Cartan::Messaging.new(@uuid, @config[:namespace], @config[:amqp])
+        @msg.start
+
+        @msg.subscribe_exclusive(exclusive_handler)
 
         yield if block_given?
         started!
@@ -73,6 +76,31 @@ module Cartan
           Cartan::Log.error "SIG#{signal} received, stopping."
           stop if running?
         }
+      end
+    end
+
+    # Convenience method for identifying node types.
+    def type
+      self.class.name
+    end
+
+    # A hash containing info about this node
+    def info
+      { :type => type }
+    end
+
+    def exclusive_handler
+      @exclusive_handler ||= Cartan::MessageHandler.new(self, proc{ node_state }) do
+
+        state :running do |uuid, label, message|
+
+          case label
+          when "heartbeat"
+            @node.msg.send_node(uuid, "heartbeat.response", @node.info)
+          end
+
+        end
+
       end
     end
 
